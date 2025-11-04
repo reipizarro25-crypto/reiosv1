@@ -44,8 +44,8 @@ body {
 
 textarea,input[type=text],button,select,input[type=color],input[type=number], canvas { font-family:'Press Start 2P', monospace; font-size:10px; background:black; color:currentColor; border:2px solid currentColor; }
 
-#paintCanvas,#cmdOutput { border:2px solid currentColor; image-rendering: pixelated; display:block; }
-#cmdOutput { width:100%; height:calc(100% - 25px); overflow-y:auto; font-size:10px; padding:2px; }
+#paintCanvas,#cmdOutput,#chatOutput { border:2px solid currentColor; image-rendering: pixelated; display:block; }
+#cmdOutput, #chatOutput { width:100%; height:calc(100% - 25px); overflow-y:auto; font-size:10px; padding:2px; }
 #scriptList { margin-top:5px; border:2px solid currentColor; padding:5px; max-height:30vh; overflow:auto; font-size:10px; }
 #scriptList h3 { margin:0; font-size:12px; }
 
@@ -64,7 +64,8 @@ textarea,input[type=text],button,select,input[type=color],input[type=number], ca
   <div class="icon" style="top:35vh; left:5vw;" draggable="true" data-app="Browser"><img src="https://img.icons8.com/ios-filled/50/00ff00/internet.png"/><div>BROWSER</div></div>
   <div class="icon" style="top:50vh; left:5vw;" draggable="true" data-app="Paint"><img src="https://img.icons8.com/ios-filled/50/00ff00/paint-brush.png"/><div>PAINT</div></div>
   <div class="icon" style="top:65vh; left:5vw;" draggable="true" data-app="CMD"><img src="https://img.icons8.com/ios-filled/50/00ff00/console.png"/><div>CMD</div></div>
-  <div class="icon" style="top:80vh; left:5vw;" draggable="true" data-app="Settings"><img src="https://img.icons8.com/ios-filled/50/00ff00/settings.png"/><div>SETTINGS</div></div>
+  <div class="icon" style="top:80vh; left:5vw;" draggable="true" data-app="Chat"><img src="https://img.icons8.com/ios-filled/50/00ff00/chat.png"/><div>CHAT</div></div>
+  <div class="icon" style="top:95vh; left:5vw;" draggable="true" data-app="Settings"><img src="https://img.icons8.com/ios-filled/50/00ff00/settings.png"/><div>SETTINGS</div></div>
 </div>
 
 <div id="startMenu">
@@ -73,6 +74,7 @@ textarea,input[type=text],button,select,input[type=color],input[type=number], ca
   <button onclick="openWindow('Browser')">Browser</button>
   <button onclick="openWindow('Paint')">Paint</button>
   <button onclick="openWindow('CMD')">CMD</button>
+  <button onclick="openWindow('Chat')">Chat</button>
   <button onclick="openWindow('Settings')">Settings</button>
 </div>
 
@@ -83,6 +85,7 @@ textarea,input[type=text],button,select,input[type=color],input[type=number], ca
   <button onclick="openWindow('Browser')">BROWSER</button>
   <button onclick="openWindow('Paint')">PAINT</button>
   <button onclick="openWindow('CMD')">CMD</button>
+  <button onclick="openWindow('Chat')">CHAT</button>
   <button onclick="openWindow('Settings')">SETTINGS</button>
 </div>
 
@@ -119,7 +122,6 @@ function openWindow(title){
   document.addEventListener('mousemove', drag);
   document.addEventListener('mouseup', stopDrag);
 
-  // Resize observer for auto-resize content
   const resizeObserver = new ResizeObserver(()=>resizeAppContent(title));
   resizeObserver.observe(win);
 
@@ -127,6 +129,7 @@ function openWindow(title){
   if(title==='CMD') initCMD(win);
   if(title==='Calculator') initCalc(win);
   if(title==='Notepad') initNotepad(win);
+  if(title==='Chat') initChat(win);
 }
 
 // Close window
@@ -146,7 +149,12 @@ function getAppContent(title){
     case 'Paint': 
       return `<div style="margin-bottom:5px;">
                 <label>Color: </label><input type="color" id="paintColor" value="#00ff00">
-                <label>Brush: </label><input type="number" id="brushSize" value="5" min="1" max="50" style="width:50px;">
+                <label>Brush Size: </label>
+                <button onclick="setBrush(2)">Small</button>
+                <button onclick="setBrush(5)">Medium</button>
+                <button onclick="setBrush(10)">Large</button>
+                <button onclick="setTool('brush')">Brush</button>
+                <button onclick="setTool('bucket')">Bucket</button>
                 <button onclick="clearCanvas()">CLEAR</button>
               </div>
               <canvas id="paintCanvas"></canvas>`;
@@ -171,13 +179,17 @@ function getAppContent(title){
             <li><strong>loop(n, command)</strong> - Repeats a command n times.</li>
           </ul>
         </div>`;
+    case 'Chat':
+      return `<div id="chatOutput"></div>
+              <input type="text" id="chatInput" placeholder="Type message..." style="width:80%">
+              <button onclick="sendChat()">SEND</button>`;
     case 'Settings':
       return `<div>Color Settings: <input type="color" id="uiColor" value="#00ff00" onchange="changeUIColor(this.value)"></div>`;
     default: return '';
   }
 }
 
-// Auto-resize content
+// Auto-resize
 function resizeAppContent(title){
   const win=document.getElementById(title);
   if(!win) return;
@@ -187,7 +199,7 @@ function resizeAppContent(title){
     const ctx = canvas.getContext('2d');
     const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
     canvas.width = win.clientWidth-20;
-    canvas.height = win.clientHeight-70;
+    canvas.height = win.clientHeight-100;
     ctx.putImageData(imgData,0,0);
   }
   if(title==='Notepad'){
@@ -197,6 +209,10 @@ function resizeAppContent(title){
   if(title==='Calculator'){
     const display = win.querySelector('#calcDisplay');
     if(display) display.style.width=(win.clientWidth-20)+'px';
+  }
+  if(title==='Chat'){
+    const chatOut = win.querySelector('#chatOutput');
+    if(chatOut) chatOut.style.height=(win.clientHeight-50)+'px';
   }
 }
 
@@ -216,7 +232,7 @@ function searchWeb(){
 }
 
 // Paint
-let paintCanvas, paintCtx, painting=false;
+let paintCanvas, paintCtx, painting=false, currentTool='brush';
 function initPaint(win){
   paintCanvas = win.querySelector('#paintCanvas');
   paintCtx = paintCanvas.getContext('2d');
@@ -230,13 +246,18 @@ function initPaint(win){
     const rect=paintCanvas.getBoundingClientRect();
     const x=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
     const y=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
-    paintCtx.lineWidth=parseInt(document.getElementById('brushSize').value);
+    paintCtx.lineWidth=parseInt(document.getElementById('brushSize')?.value||5);
     paintCtx.lineCap='round';
-    paintCtx.strokeStyle=document.getElementById('paintColor').value;
-    paintCtx.lineTo(x,y);
-    paintCtx.stroke();
-    paintCtx.beginPath();
-    paintCtx.moveTo(x,y);
+    if(currentTool==='brush'){
+      paintCtx.strokeStyle=document.getElementById('paintColor').value;
+      paintCtx.lineTo(x,y);
+      paintCtx.stroke();
+      paintCtx.beginPath();
+      paintCtx.moveTo(x,y);
+    } else if(currentTool==='bucket'){
+      bucketFill(Math.floor(x),Math.floor(y), document.getElementById('paintColor').value);
+      painting=false;
+    }
   }
 
   paintCanvas.addEventListener('mousedown',start);
@@ -246,6 +267,35 @@ function initPaint(win){
   paintCanvas.addEventListener('touchend',end);
   paintCanvas.addEventListener('touchmove',draw,{passive:false});
 }
+
+function setBrush(size){ document.getElementById('brushSize').value=size; currentTool='brush'; }
+function setTool(tool){ currentTool=tool; }
+
+// Simple bucket fill (pixel-based)
+function bucketFill(startX,startY,fillColor){
+  const ctx=paintCtx;
+  const w=paintCanvas.width, h=paintCanvas.height;
+  const imgData=ctx.getImageData(0,0,w,h);
+  const data=imgData.data;
+  const px = (x,y)=>((y*w)+x)*4;
+  const getColor=(x,y)=>[data[px(x,y)],data[px(x,y)+1],data[px(x,y)+2],data[px(x,y)+3]];
+  const setColor=(x,y,r,g,b,a)=>{ const i=px(x,y); data[i]=r; data[i+1]=g; data[i+2]=b; data[i+3]=a; };
+  const target=getColor(startX,startY);
+  const colorHex=fillColor.match(/\w\w/g).map(h=>parseInt(h,16));
+  if(target[0]===colorHex[0] && target[1]===colorHex[1] && target[2]===colorHex[2]) return;
+  const stack=[[startX,startY]];
+  while(stack.length>0){
+    const [x,y]=stack.pop();
+    if(x<0||y<0||x>=w||y>=h) continue;
+    const c=getColor(x,y);
+    if(c[0]===target[0] && c[1]===target[1] && c[2]===target[2]){
+      setColor(x,y,colorHex[0],colorHex[1],colorHex[2],255);
+      stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+    }
+  }
+  ctx.putImageData(imgData,0,0);
+}
+
 function clearCanvas(){ if(paintCtx && paintCanvas) paintCtx.clearRect(0,0,paintCanvas.width,paintCanvas.height); }
 
 // CMD
@@ -263,16 +313,29 @@ function runNoobCode(){
   }
 }
 
-// Change UI color
-function changeUIColor(c){
-  currentColor=c;
-  document.querySelectorAll('*').forEach(el=>{
-    const style = getComputedStyle(el);
-    if(style.color===currentColor) el.style.color=c;
-    if(style.borderColor===currentColor) el.style.borderColor=c;
-  });
+// Chat
+let chatMessages=[];
+function initChat(win){ resizeAppContent('Chat'); updateChat(); }
+function sendChat(){
+  const input=document.getElementById('chatInput');
+  if(input.value.trim()==='') return;
+  chatMessages.push({user:'You', msg:input.value});
+  chatMessages.push({user:'Bot', msg:'Echo: '+input.value}); // simulate response
+  input.value='';
+  updateChat();
 }
+function updateChat(){
+  const chatOut=document.getElementById('chatOutput');
+  if(chatOut){
+    chatOut.innerHTML='';
+    chatMessages.forEach(m=>chatOut.innerHTML+='<div><strong>'+m.user+':</strong> '+m.msg+'</div>');
+    chatOut.scrollTop=chatOut.scrollHeight;
+  }
+}
+
+// Settings
+function changeUIColor(c){ currentColor=c; document.querySelectorAll('*').forEach(el=>{const s=getComputedStyle(el); if(s.color===currentColor) el.style.color=c; if(s.borderColor===currentColor) el.style.borderColor=c;}); }
+
 </script>
 </body>
 </html>
-
