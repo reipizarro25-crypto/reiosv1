@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rei OS V1</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+body {
+  margin:0; font-family:'Press Start 2P', monospace;
+  background:black; color:#00ff00; overflow:hidden;
+}
+* { image-rendering: pixelated; box-sizing:border-box; }
+
+#startMenu { position:fixed; bottom:5vh; left:0; width:200px; background:black; border:2px solid currentColor; display:none; flex-direction:column; z-index:1000;}
+#startMenu button { background:black; color:currentColor; border:2px solid currentColor; padding:5px; text-align:left; font-size:10px; }
+#startMenu button:hover { background:#111; }
+
+#taskbar { position:fixed; bottom:0; left:0; width:100%; height:8vh; background:black; display:flex; align-items:center; padding:0.5vh 1vw; box-sizing:border-box; border-top:2px solid currentColor; flex-wrap:wrap; z-index:999;}
+#taskbar button { margin-right:1vw; padding:1vh 1vw; background:black; border:2px solid currentColor; color:currentColor; cursor:pointer; flex-shrink:0; font-size:10px; }
+#taskbar button:hover { background:#111; }
+
+#desktop { width:100%; height:100vh; position:relative; overflow:hidden; }
+
+.icon {
+  position:absolute;
+  width:12vw;       /* responsive */
+  max-width:80px;   /* cap for desktop */
+  text-align:center;
+  cursor:pointer;
+  color:currentColor;
+  user-select:none;
+  touch-action:none;
+}
+.icon img { width:80%; height:auto; filter:invert(100%) brightness(2); }
+
+.window { position:absolute; width:40vw; height:50vh; background:black; border:2px solid currentColor; box-shadow:0 0 4px currentColor; display:flex; flex-direction:column; resize:both; overflow:hidden; font-size:10px; min-width:200px; min-height:150px; }
+.window-header { background:#111; padding:0.5vh 1vw; cursor:move; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid currentColor; touch-action:none; }
+.window-header span { font-weight:bold; color:currentColor; }
+.window-header button { background:black; border:2px solid currentColor; width:20px; height:20px; color:currentColor; cursor:pointer; font-weight:bold; }
+.window-header button:hover { background:#111; }
+.window-content { flex:1; padding:0.5vh 1vw; overflow:auto; color:currentColor; background:black; display:flex; flex-direction:column; }
+
+textarea,input[type=text],button,select,input[type=color],input[type=number], canvas { font-family:'Press Start 2P', monospace; font-size:10px; background:black; color:currentColor; border:2px solid currentColor; }
+
+#paintCanvas,#cmdOutput { border:2px solid currentColor; image-rendering: pixelated; display:block; }
+#cmdOutput { width:100%; height:calc(100% - 25px); overflow-y:auto; font-size:10px; padding:2px; }
+#scriptList { margin-top:5px; border:2px solid currentColor; padding:5px; max-height:30vh; overflow:auto; font-size:10px; }
+#scriptList h3 { margin:0; font-size:12px; }
+
+@media(max-width:768px){
+  .window { width:90vw; height:50vh; }
+  .icon { width:20vw; max-width:none; }
+  #taskbar button { font-size:8px; padding:1vh 2vw; }
+}
+</style>
+</head>
+<body>
+
+<div id="desktop">
+  <div class="icon" style="top:5vh; left:5vw;" draggable="true" data-app="Notepad"><img src="https://img.icons8.com/ios-filled/50/00ff00/notepad.png"/><div>NOTEPAD</div></div>
+  <div class="icon" style="top:20vh; left:5vw;" draggable="true" data-app="Calculator"><img src="https://img.icons8.com/ios-filled/50/00ff00/calculator.png"/><div>CALC</div></div>
+  <div class="icon" style="top:35vh; left:5vw;" draggable="true" data-app="Browser"><img src="https://img.icons8.com/ios-filled/50/00ff00/internet.png"/><div>BROWSER</div></div>
+  <div class="icon" style="top:50vh; left:5vw;" draggable="true" data-app="Paint"><img src="https://img.icons8.com/ios-filled/50/00ff00/paint-brush.png"/><div>PAINT</div></div>
+  <div class="icon" style="top:65vh; left:5vw;" draggable="true" data-app="CMD"><img src="https://img.icons8.com/ios-filled/50/00ff00/console.png"/><div>CMD</div></div>
+  <div class="icon" style="top:80vh; left:5vw;" draggable="true" data-app="Settings"><img src="https://img.icons8.com/ios-filled/50/00ff00/settings.png"/><div>SETTINGS</div></div>
+</div>
+
+<div id="startMenu">
+  <button onclick="openWindow('Notepad')">Notepad</button>
+  <button onclick="openWindow('Calculator')">Calculator</button>
+  <button onclick="openWindow('Browser')">Browser</button>
+  <button onclick="openWindow('Paint')">Paint</button>
+  <button onclick="openWindow('CMD')">CMD</button>
+  <button onclick="openWindow('Settings')">Settings</button>
+</div>
+
+<div id="taskbar">
+  <button onclick="toggleStartMenu()">START</button>
+  <button onclick="openWindow('Notepad')">NOTEPAD</button>
+  <button onclick="openWindow('Calculator')">CALC</button>
+  <button onclick="openWindow('Browser')">BROWSER</button>
+  <button onclick="openWindow('Paint')">PAINT</button>
+  <button onclick="openWindow('CMD')">CMD</button>
+  <button onclick="openWindow('Settings')">SETTINGS</button>
+</div>
+
+<script>
+let zIndex = 1;
+let currentColor="#00ff00";
+
+function toggleStartMenu(){ const menu=document.getElementById('startMenu'); menu.style.display=(menu.style.display==='flex')?'none':'flex'; }
+
+document.querySelectorAll('.icon').forEach(icon=>{
+  icon.addEventListener('dragstart', e=>{ e.dataTransfer.setData('app', icon.dataset.app); });
+  icon.addEventListener('click', ()=>openWindow(icon.dataset.app));
+});
+
+// Open windows
+function openWindow(title){
+  toggleStartMenu();
+  if(document.getElementById(title)) return;
+  const win=document.createElement('div');
+  win.classList.add('window'); win.id=title;
+  win.style.top='15vh'; win.style.left='25vw'; win.style.zIndex=zIndex++;
+  win.innerHTML=`
+    <div class="window-header"><span>${title}</span><button onclick="closeWindow('${title}')">X</button></div>
+    <div class="window-content">${getAppContent(title)}</div>`;
+  document.getElementById('desktop').appendChild(win);
+
+  // Drag
+  const header=win.querySelector('.window-header');
+  let offsetX=0, offsetY=0, dragging=false;
+  function startDrag(e){ dragging=true; offsetX=e.clientX-win.offsetLeft; offsetY=e.clientY-win.offsetTop; win.style.zIndex=zIndex++; }
+  function drag(e){ if(!dragging) return; win.style.left=(e.clientX-offsetX)+'px'; win.style.top=(e.clientY-offsetY)+'px'; resizeAppContent(title); }
+  function stopDrag(){ dragging=false; resizeAppContent(title); }
+  header.addEventListener('mousedown', startDrag);
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', stopDrag);
+
+  // Resize observer for auto-resize content
+  const resizeObserver = new ResizeObserver(()=>resizeAppContent(title));
+  resizeObserver.observe(win);
+
+  if(title==='Paint') initPaint(win);
+  if(title==='CMD') initCMD(win);
+  if(title==='Calculator') initCalc(win);
+  if(title==='Notepad') initNotepad(win);
+}
+
+// Close window
+function closeWindow(id){ const win=document.getElementById(id); if(win) win.remove(); }
+
+// App contents
+function getAppContent(title){
+  switch(title){
+    case 'Notepad': return `<textarea id="notepadArea" style="width:100%; height:100%;"></textarea>`;
+    case 'Calculator': 
+      return `<input type="text" id="calcDisplay" style="width:100%; height:30px; margin-bottom:5px; text-align:right;" readonly>
+        <div style="display:grid; grid-template-columns: repeat(4,1fr); gap:2px;">
+        ${['7','8','9','/','4','5','6','*','1','2','3','-','0','.','=','+'].map(c=>`<button onclick="calcPress('${c}')">${c}</button>`).join('')}</div>`;
+    case 'Browser': 
+      return `<div style="margin-bottom:5px;"><input type="text" id="searchQuery" placeholder="Search the web..."><button onclick="searchWeb()">SEARCH</button></div>
+              <div id="browserOutput" style="width:100%; height:calc(100% - 40px); overflow:auto; border:2px solid currentColor; padding:5px;">Results open in new tab.</div>`;
+    case 'Paint': 
+      return `<div style="margin-bottom:5px;">
+                <label>Color: </label><input type="color" id="paintColor" value="#00ff00">
+                <label>Brush: </label><input type="number" id="brushSize" value="5" min="1" max="50" style="width:50px;">
+                <button onclick="clearCanvas()">CLEAR</button>
+              </div>
+              <canvas id="paintCanvas"></canvas>`;
+    case 'CMD': 
+      return `<div id="cmdOutput"></div>
+        <textarea id="noobCode" style="width:100%; height:100px; background:black; color:currentColor; border:2px solid currentColor;"></textarea>
+        <div id="cmdBlocks" style="margin-top:5px; display:flex; flex-wrap:wrap; gap:5px;">
+          <button onclick="insertBlock('createWindow(\\\"MyApp\\\")')">New Window</button>
+          <button onclick="insertBlock('writeText(\\\"Hello World\\\")')">Write Text</button>
+          <button onclick="insertBlock('drawRect(10,10,50,50)')">Draw Rect</button>
+          <button onclick="insertBlock('setColor(\\\"#ff0000\\\")')">Red Color</button>
+          <button onclick="insertBlock('loop(3, writeText(\\\"Hi\\\"))')">Loop Example</button>
+          <button onclick="runNoobCode()">RUN</button>
+        </div>
+        <div id="scriptList">
+          <h3>Noob CMD Script List</h3>
+          <ul>
+            <li><strong>createWindow("Title")</strong> - Creates a new window.</li>
+            <li><strong>writeText("Text")</strong> - Writes text in CMD output.</li>
+            <li><strong>drawRect(x,y,w,h)</strong> - Draws a rectangle on Paint.</li>
+            <li><strong>setColor("#hex")</strong> - Changes drawing color.</li>
+            <li><strong>loop(n, command)</strong> - Repeats a command n times.</li>
+          </ul>
+        </div>`;
+    case 'Settings':
+      return `<div>Color Settings: <input type="color" id="uiColor" value="#00ff00" onchange="changeUIColor(this.value)"></div>`;
+    default: return '';
+  }
+}
+
+// Auto-resize content
+function resizeAppContent(title){
+  const win=document.getElementById(title);
+  if(!win) return;
+  if(title==='Paint'){
+    const canvas = win.querySelector('#paintCanvas');
+    canvas.width = win.clientWidth-20;
+    canvas.height = win.clientHeight-70;
+  }
+  if(title==='Notepad'){
+    const area = win.querySelector('#notepadArea');
+    area.style.width = (win.clientWidth-20)+'px';
+    area.style.height = (win.clientHeight-20)+'px';
+  }
+  if(title==='Calculator'){
+    const display = win.querySelector('#calcDisplay');
+    display.style.width = (win.clientWidth-20)+'px';
+  }
+}
+
+// Calculator
+let calcValue='';
+function calcPress(c){ 
+  if(c==='='){ try{ calcValue=eval(calcValue); }catch(e){ calcValue='ERROR'; } document.getElementById('calcDisplay').value=calcValue; calcValue=''; }
+  else{ calcValue+=c; document.getElementById('calcDisplay').value=calcValue; }
+}
+function initCalc(win){ resizeAppContent('Calculator'); }
+function initNotepad(win){ resizeAppContent('Notepad'); }
+
+// Browser
+function searchWeb(){
+  const q=document.getElementById('searchQuery').value;
+  if(q) window.open('https://www.google.com/search?q='+encodeURIComponent(q),'_blank');
+}
+
+// Paint
+let paintCanvas, paintCtx, painting=false;
+function initPaint(win){
+  paintCanvas = win.querySelector('#paintCanvas');
+  paintCtx = paintCanvas.getContext('2d');
+  clearCanvas();
+
+  function start(e){ painting=true; draw(e); }
+  function end(){ painting=false; paintCtx.beginPath(); }
+  function draw(e){
+    if(!painting) return;
+    const rect=paintCanvas.getBoundingClientRect();
+    const x=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+    const y=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
+    paintCtx.lineWidth=parseInt(document.getElementById('brushSize').value);
+    paintCtx.lineCap='round';
+    paintCtx.strokeStyle=document.getElementById('paintColor').value;
+    paintCtx.lineTo(x,y);
+    paintCtx.stroke();
+    paintCtx.beginPath();
+    paintCtx.moveTo(x,y);
+  }
+
+  paintCanvas.addEventListener('mousedown',start);
+  paintCanvas.addEventListener('mouseup',end);
+  paintCanvas.addEventListener('mousemove',draw);
+  paintCanvas.addEventListener('touchstart',start,{passive:false});
+  paintCanvas.addEventListener('touchend',end);
+  paintCanvas.addEventListener('touchmove',draw,{passive:false});
+}
+function clearCanvas(){ if(paintCtx && paintCanvas) paintCtx.clearRect(0,0,paintCanvas.width,paintCanvas.height); }
+
+// CMD
+let cmdOutput;
+function initCMD(win){ cmdOutput = win.querySelector('#cmdOutput'); }
+function insertBlock(code){ document.getElementById('noobCode').value += code+'\n'; }
+function runNoobCode(){ 
+  const lines=document.getElementById('noobCode').value.split('\n');
+  lines.forEach(line=>{ cmdOutput.innerHTML+='<div>'+line+'</div>'; });
+}
+
+// Change UI color
+function changeUIColor(c){
+  document.querySelectorAll('*').forEach(el=>{
+    if(getComputedStyle(el).color===currentColor) el.style.color=c;
+    if(getComputedStyle(el).borderColor===currentColor) el.style.borderColor=c;
+  });
+  currentColor=c;
+}
+</script>
+</body>
+</html>
